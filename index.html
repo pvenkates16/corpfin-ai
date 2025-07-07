@@ -78,20 +78,6 @@
         button#btn-all { background-color: #8A2BE2; } /* Blue Violet */
         button#btn-all:hover { background-color: #6A1BA0; }
 
-        /* Style for the visitor counter */
-        #visitor-counter-container {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            color: #ADD8E6;
-            font-size: 0.9em;
-            z-index: 10;
-            background: rgba(10, 10, 30, 0.9);
-            padding: 10px 15px;
-            border-radius: 8px;
-            border: 1px solid #1a1a3a;
-        }
-
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
             border-top: 4px solid #007bff;
@@ -137,10 +123,6 @@
         <button id="btn-reset">Reset View</button>
     </div>
     <div class="spinner" id="loading-spinner"></div>
-
-    <div id="visitor-counter-container">
-        Visitors: <span id="visitor-count">Loading...</span>
-    </div>
 
     <script type="importmap">
         {
@@ -327,7 +309,6 @@
             loadModelsAndCreateScene(); // Asynchronous loading
             addEventListeners();
             updateInfoPanel(financeData.overall, true);
-            updateVisitorCounter(); // Call the new visitor counter function here
         }
 
         // --- Loading 3D Models ---
@@ -854,37 +835,6 @@
 
         function hideLoadingSpinner() {
             loadingSpinner.style.display = 'none';
-        }
-
-        // --- NEW: CountAPI Integration Function ---
-        function updateVisitorCounter() {
-            const visitorCountElement = document.getElementById('visitor-count');
-            if (!visitorCountElement) return;
-
-            // IMPORTANT: Replace 'yourwebsite.com/ai_finance_visitors' with a UNIQUE key for your counter.
-            // This key identifies YOUR counter on CountAPI's server.
-            const countApiKey = 'pvenkates16/corpfin-ai'; // <--- CHANGE THIS!
-            const apiEndpoint = `https://api.countapi.xyz/hit/${countApiKey}`;
-
-            fetch(apiEndpoint)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data && data.value !== undefined) {
-                        visitorCountElement.textContent = data.value.toLocaleString(); // Format with commas
-                    } else {
-                        visitorCountElement.textContent = 'N/A';
-                        console.warn('CountAPI returned no count value:', data);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching visitor count from CountAPI:', error);
-                    visitorCountElement.textContent = 'Error';
-                });
         }
 
         // --- Start the experience ---

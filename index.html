@@ -78,6 +78,19 @@
         button#btn-all { background-color: #8A2BE2; } /* Blue Violet */
         button#btn-all:hover { background-color: #6A1BA0; }
 
+        /* Style for the visitor counter */
+        #visitor-counter-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #ADD8E6;
+            font-size: 0.9em;
+            z-index: 10;
+            background: rgba(10, 10, 30, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #1a1a3a;
+        }
 
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
@@ -105,8 +118,7 @@
         <h1 id="main-title">AI in Corporate Finance: The Future Unfolds</h1>
         <div id="content-area">
             <div id="overall-stats">
-                <!-- Overall stats will be loaded here -->
-            </div>
+                </div>
             <div id="ai-type-details" style="display: none;">
                 <h2 id="ai-type-headline"></h2>
                 <p id="ai-type-description-text"></p>
@@ -125,6 +137,10 @@
         <button id="btn-reset">Reset View</button>
     </div>
     <div class="spinner" id="loading-spinner"></div>
+
+    <div id="visitor-counter-container">
+        Visitors: <span id="visitor-count">Loading...</span>
+    </div>
 
     <script type="importmap">
         {
@@ -185,7 +201,7 @@
                     "**60%** of companies currently use automation solutions (Coherent Solutions).",
                     "Up to **80%** of finance's transactional workflow** could be automated (Accenture estimate).",
                     "Financial Automation Market CAGR: **14.2% (2024-2032)**.",
-                    "**63%** of CFOs say AI made payment automation *significantl y easier* (up 23% from 2024) (Citizens Bank 2025 Report)."
+                    "**63%** of CFOs say AI made payment automation *significantly easier* (up 23% from 2024) (Citizens Bank 2025 Report)."
                 ],
                 functions: [
                     "Accounts Payable/Receivable",
@@ -293,7 +309,7 @@
             // Post-processing (for outlines and better rendering)
             composer = new EffectComposer(renderer);
             const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+            composer.addPass(renderPass);
 
             outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
             outlinePass.edgeStrength = 3;
@@ -311,6 +327,7 @@
             loadModelsAndCreateScene(); // Asynchronous loading
             addEventListeners();
             updateInfoPanel(financeData.overall, true);
+            updateVisitorCounter(); // Call the new visitor counter function here
         }
 
         // --- Loading 3D Models ---
@@ -578,7 +595,7 @@
                     .to({ opacity: 0.6, emissiveIntensity: 0.8 }, 500)
                     .easing(TWEEN.Easing.Quadratic.Out)
                     .start();
-                
+
                 // Simple scale up animation for the wave itself
                 new TWEEN.Tween(wave.scale)
                     .to({ x: 1.05, y: 1.05, z: 1.05 }, 500)
@@ -593,7 +610,7 @@
 
                 // Show point labels in succession
                 let delay = 0;
-                const delayIncrement = 2000; // Milliseconds between each label appearing (2 seconds)
+                const delayIncrement = 200; // Milliseconds between each label appearing
                 // Filter for only impact points that have labels and sort them by angle for sequential appearance
                 const pointsWithLabels = wave.children.filter(child => child.userData.isImpactPoint && child.userData.label)
                                                     .sort((a, b) => {
@@ -680,63 +697,101 @@
                 .easing(TWEEN.Easing.Quadratic.Out)
                 .start();
 
-            hideAllWavesAndLabels(); // Hide all waves and labels
-
+            // Reset UI and hide specific AI impact details
             updateInfoPanel(financeData.overall, true);
-            currentActiveLayer = null;
-            outlinePass.selectedObjects = []; // Clear outline
+            currentActiveLayer = null; // No active layer
+
+            // Fade out and hide all AI waves and their impact points
+            for (const type in aiWaves) {
+                const wave = aiWaves[type];
+                if (wave) {
+                    new TWEEN.Tween(wave.material)
+                        .to({ opacity: 0.1, emissiveIntensity: 0.3 }, 500)
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .onComplete(() => {
+                            wave.visible = false; // Hide completely after fade
+                        })
+                        .start();
+                    if (wave.userData.label) {
+                        wave.userData.label.visible = false; // Hide wave labels immediately
+                    }
+                    wave.children.forEach(child => {
+                        if (child.userData.isImpactPoint) {
+                            child.visible = false; // Hide points
+                            if (child.userData.label) {
+                                child.userData.label.visible = false; // Hide point labels
+                            }
+                        }
+                    });
+                }
+            }
+            outlinePass.selectedObjects = []; // Clear any outlines
             if (currentHoveredObject) {
                 currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex);
                 currentHoveredObject = null;
             }
         }
 
-        // --- Raycasting for Interaction ---
         function onMouseMove(event) {
-            event.preventDefault();
-
+            // Calculate mouse position in normalized device coordinates (-1 to +1)
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
 
-            const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
+            // Check for intersection with AI impact points
+            let intersects = [];
+            for (const type in aiWaves) {
+                const wave = aiWaves[type];
+                if (wave && wave.visible) { // Only check visible waves
+                    const impactPoints = wave.children.filter(child => child.userData.isImpactPoint);
+                    intersects.push(...raycaster.intersectObjects(impactPoints, true));
+                }
+            }
 
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
 
-                // Only highlight impact points, and only on the active layer OR if "All" is active
-                const targetSphere = intersectedObject.userData.isImpactPoint ? intersectedObject : (intersectedObject.parent && intersectedObject.parent.userData.isImpactPoint ? intersectedObject.parent : null);
-
-                if (targetSphere &&
-                    (currentActiveLayer === targetSphere.userData.aiType || currentActiveLayer === null)) { // Highlight if specific layer is active OR if "All" is active (currentActiveLayer is null)
-
-                    if (currentHoveredObject != targetSphere) {
-                        if (currentHoveredObject) { // Reset previous hovered object
-                            currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex);
-                            new TWEEN.Tween(currentHoveredObject.scale).to({ x: 1, y: 1, z: 1 }, 150).start();
-                        }
-                        currentHoveredObject = targetSphere;
-                        currentHoveredObject.currentHex = currentHoveredObject.material.emissive.getHex(); // Store original color
-                        currentHoveredObject.material.emissive.setHex(0xFFFFFF); // Highlight in white
-                        new TWEEN.Tween(currentHoveredObject.scale).to({ x: 1.2, y: 1.2, z: 1.2 }, 150).start(); // Scale up
-                        outlinePass.selectedObjects = [currentHoveredObject]; // Add to outline
-                    }
-                } else {
-                    if (currentHoveredObject) { // If mouse moved off valid object
+                if (currentHoveredObject !== intersectedObject) {
+                    // Restore previous object's color
+                    if (currentHoveredObject && currentHoveredObject.material) {
                         currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex);
-                        new TWEEN.Tween(currentHoveredObject.scale).to({ x: 1, y: 1, z: 1 }, 150).start();
-                        currentHoveredObject = null;
-                        outlinePass.selectedObjects = [];
+                    }
+
+                    // Store current object and its original color
+                    currentHoveredObject = intersectedObject;
+                    currentHoveredObject.currentHex = currentHoveredObject.material.emissive.getHex();
+
+                    // Apply hover effect (e.g., brighter emissive color)
+                    currentHoveredObject.material.emissive.setHex(0xFFFFFF); // Brighter white glow
+
+                    // Add to outline pass if not already selected
+                    if (!outlinePass.selectedObjects.includes(currentHoveredObject)) {
+                        outlinePass.selectedObjects = [currentHoveredObject];
+                    }
+
+                    // Show associated label if available
+                    if (intersectedObject.userData.label) {
+                        intersectedObject.userData.label.visible = true;
+                        // Animate label scale up
+                        new TWEEN.Tween(intersectedObject.userData.label.scale)
+                            .to({ x: 2.2, y: 0.8, z: 1 }, 200) // Slightly larger than normal
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .start();
                     }
                 }
             } else {
-                if (currentHoveredObject) { // If mouse moved off any object
-                    currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex);
-                    new TWEEN.Tween(currentHoveredObject.scale).to({ x: 1, y: 1, z: 1 }, 150).start();
-                    currentHoveredObject = null;
-                    outlinePass.selectedObjects = [];
+                // No intersection or moved off object
+                if (currentHoveredObject && currentHoveredObject.material) {
+                    currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex); // Restore color
+                    if (currentHoveredObject.userData.label) {
+                        currentHoveredObject.userData.label.visible = false; // Hide label
+                        // Reset label scale
+                        currentHoveredObject.userData.label.scale.set(2, 0.7, 1);
+                    }
                 }
+                outlinePass.selectedObjects = []; // Clear outlines
+                currentHoveredObject = null;
             }
         }
 
@@ -745,26 +800,27 @@
         function animate() {
             animationFrameId = requestAnimationFrame(animate);
 
-            controls.update();
-            TWEEN.update();
+            TWEEN.update(); // Update TWEEN animations
 
-            // Rotate finance hub
+            controls.update(); // Only required if controls.enableDamping is set to true
+
+            // Optional: Animate hub slightly
             if (objects.financeHub) {
-                objects.financeHub.rotation.y += 0.002;
+                objects.financeHub.rotation.y += 0.001;
+                objects.financeHub.rotation.x = Math.sin(Date.now() * 0.0005) * 0.05; // Slight tilt animation
             }
 
-            // Animate points on active layer
-            if (currentActiveLayer && aiWaves[currentActiveLayer]) {
+            // Animate only the active layer's points, or all if "Show All" is active
+            if (currentActiveLayer) {
                 const wave = aiWaves[currentActiveLayer];
-                wave.children.forEach((child, index) => {
-                    if (child.userData.isImpactPoint) {
-                        // Simple up-down animation for points
-                        child.position.y = Math.sin(Date.now() * 0.002 + index * 0.5) * 0.3;
-                    }
-                });
-
-                // Also add a subtle rotation to the active wave itself
-                wave.rotation.z += 0.001; // Slow rotation
+                if (wave) {
+                    wave.children.forEach((child, index) => {
+                        if (child.userData.isImpactPoint) {
+                            child.position.y = Math.sin(Date.now() * 0.002 + index * 0.5) * 0.3; // Floating effect
+                        }
+                    });
+                    wave.rotation.z += 0.001; // Rotate the specific wave
+                }
             } else if (currentActiveLayer === null) { // If "All" is active, animate all waves
                 for (const type in aiWaves) {
                     const wave = aiWaves[type];
@@ -800,9 +856,39 @@
             loadingSpinner.style.display = 'none';
         }
 
+        // --- NEW: CountAPI Integration Function ---
+        function updateVisitorCounter() {
+            const visitorCountElement = document.getElementById('visitor-count');
+            if (!visitorCountElement) return;
+
+            // IMPORTANT: Replace 'yourwebsite.com/ai_finance_visitors' with a UNIQUE key for your counter.
+            // This key identifies YOUR counter on CountAPI's server.
+            const countApiKey = 'pvenkates16-corpfin-ai'; // <--- CHANGE THIS!
+            const apiEndpoint = `https://api.countapi.xyz/hit/${countApiKey}`;
+
+            fetch(apiEndpoint)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.value !== undefined) {
+                        visitorCountElement.textContent = data.value.toLocaleString(); // Format with commas
+                    } else {
+                        visitorCountElement.textContent = 'N/A';
+                        console.warn('CountAPI returned no count value:', data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching visitor count from CountAPI:', error);
+                    visitorCountElement.textContent = 'Error';
+                });
+        }
+
         // --- Start the experience ---
         init();
     </script>
 </body>
 </html>
-

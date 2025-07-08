@@ -348,6 +348,7 @@ function addEventListeners() {
     document.getElementById('btn-automation').addEventListener('click', () => showAIImpact('automation'));
     document.getElementById('btn-cognitive').addEventListener('click', () => showAIImpact('cognitive'));
     document.getElementById('btn-generative').addEventListener('click', () => showAIImpact('generative'));
+    document.getElementById('btn-all').addEventListener('click', showAllAIImpacts); // New event listener for "Show All"
     document.getElementById('btn-reset').addEventListener('click', resetView);
 
     window.addEventListener('resize', onWindowResize);
@@ -376,16 +377,42 @@ function updateInfoPanel(data, isOverall = false) {
     }
 }
 
+// Function to hide all waves and their labels
+function hideAllWavesAndLabels() {
+    for (const type in aiWaves) {
+        const wave = aiWaves[type];
+        if (wave) {
+            wave.visible = false;
+            wave.material.opacity = 0.1;
+            wave.material.emissiveIntensity = 0.3;
+            if (wave.userData.label) {
+                wave.userData.label.visible = false;
+            }
+            wave.children.forEach(child => {
+                if (child.userData.isImpactPoint) {
+                    child.visible = false;
+                    if (child.userData.label) {
+                        child.userData.label.visible = false;
+                    }
+                }
+            });
+        }
+    }
+}
+
 function showAIImpact(type) {
     if (currentActiveLayer === type) return; // Prevent re-triggering if already active
+
+    hideAllWavesAndLabels(); // Hide all other waves first
 
     // Animate camera to focus on the selected layer
     const targetPosition = new THREE.Vector3();
     const wave = aiWaves[type];
     if (wave) {
         wave.getWorldPosition(targetPosition); // Get world position of the wave
-        targetPosition.y += 2; // Move camera slightly above
-        targetPosition.z += 5; // Move camera back
+        // Adjusted camera Z position for individual AI types to zoom out more
+        targetPosition.y += 2;
+        targetPosition.z += 8; // Increased from 5 to 8 for more zoom out
 
         new TWEEN.Tween(camera.position)
             .to(targetPosition, 1000)
@@ -398,39 +425,18 @@ function showAIImpact(type) {
             .start();
     }
 
-    // Deactivate current layer
-    if (currentActiveLayer && aiWaves[currentActiveLayer]) {
-        const prevWave = aiWaves[currentActiveLayer];
-        new TWEEN.Tween(prevWave.material)
-            .to({ opacity: 0.1, emissiveIntensity: 0.3 }, 500)
-            .easing(TWEEN.Easing.Quadratic.Out)
-            .start();
-        prevWave.children.forEach(child => {
-            if (child.userData.isImpactPoint) {
-                new TWEEN.Tween(child.scale)
-                    .to({ x: 1, y: 1, z: 1 }, 300)
-                    .easing(TWEEN.Easing.Quadratic.Out)
-                    .start();
-                if (child.userData.label) { // Hide point label
-                    child.userData.label.visible = false;
-                }
-            }
-        });
-        if (prevWave.userData.label) {
-            prevWave.userData.label.visible = false;
-        }
-    }
-
     // Activate new layer
     if (wave) {
         wave.visible = true;
-        // Hide all point labels initially, then reveal them in succession
         wave.children.forEach(child => {
-            child.visible = true; // Points themselves are visible
+            child.visible = true; // Ensure points are visible
             if (child.userData.isImpactPoint && child.userData.label) {
-                child.userData.label.visible = false; // Ensure labels start hidden
+                child.userData.label.visible = false; // Ensure labels start hidden for successive animation
             }
         });
+        if (wave.userData.label) {
+            wave.userData.label.visible = true;
+        }
 
         new TWEEN.Tween(wave.material)
             .to({ opacity: 0.6, emissiveIntensity: 0.8 }, 500)
@@ -478,10 +484,10 @@ function showAIImpact(type) {
     }
 }
 
-function resetView() {
-    // Animate camera back to initial position
+function showAllAIImpacts() {
+    // Reset camera to initial "all visible" position
     new TWEEN.Tween(camera.position)
-        .to({ x: 0, y: 8, z: 25 }, 1000) // Reset to new initial position (x=0, y=8, z=25)
+        .to({ x: 0, y: 8, z: 25 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .start();
     new TWEEN.Tween(controls.target)
@@ -489,31 +495,56 @@ function resetView() {
         .easing(TWEEN.Easing.Quadratic.Out)
         .start();
 
-    // Fade out all waves and reset point scale
+    // Make all waves and their labels visible
     for (const type in aiWaves) {
         const wave = aiWaves[type];
         if (wave) {
+            wave.visible = true;
             new TWEEN.Tween(wave.material)
-                .to({ opacity: 0.1, emissiveIntensity: 0.3 }, 500)
+                .to({ opacity: 0.6, emissiveIntensity: 0.8 }, 500)
                 .easing(TWEEN.Easing.Quadratic.Out)
-                .onComplete(() => wave.visible = false)
                 .start();
+            if (wave.userData.label) {
+                wave.userData.label.visible = true;
+            }
+            // Show all points and their labels immediately
             wave.children.forEach(child => {
                 if (child.userData.isImpactPoint) {
+                    child.visible = true;
                     new TWEEN.Tween(child.scale)
                         .to({ x: 1, y: 1, z: 1 }, 300)
                         .easing(TWEEN.Easing.Quadratic.Out)
                         .start();
-                    if (child.userData.label) { // Hide point label
-                        child.userData.label.visible = false;
+                    if (child.userData.label) {
+                        child.userData.label.visible = true;
+                        // Reset label scale in case it was animated before
+                        child.userData.label.scale.set(2, 0.7, 1);
                     }
                 }
             });
-            if (wave.userData.label) {
-                wave.userData.label.visible = false;
-            }
         }
     }
+    updateInfoPanel(financeData.overall, true); // Show overall stats
+    currentActiveLayer = null; // No specific layer is active
+    outlinePass.selectedObjects = []; // Clear any outlines
+    if (currentHoveredObject) {
+        currentHoveredObject.material.emissive.setHex(currentHoveredObject.currentHex);
+        currentHoveredObject = null;
+    }
+}
+
+function resetView() {
+    // Animate camera back to initial "overall" position
+    new TWEEN.Tween(camera.position)
+        .to({ x: 0, y: 8, z: 25 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+    new TWEEN.Tween(controls.target)
+        .to({ x: 0, y: 0, z: 0 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+
+    hideAllWavesAndLabels(); // Hide all waves and labels
 
     updateInfoPanel(financeData.overall, true);
     currentActiveLayer = null;
@@ -538,13 +569,11 @@ function onMouseMove(event) {
     if (intersects.length > 0) {
         const intersectedObject = intersects[0].object;
 
-        // Only highlight impact points, and only on the active layer
-        // Also ensure it's not the label itself, but the sphere
+        // Only highlight impact points, and only on the active layer OR if "All" is active
         const targetSphere = intersectedObject.userData.isImpactPoint ? intersectedObject : (intersectedObject.parent && intersectedObject.parent.userData.isImpactPoint ? intersectedObject.parent : null);
 
         if (targetSphere &&
-            currentActiveLayer &&
-            targetSphere.userData.aiType === currentActiveLayer) {
+            (currentActiveLayer === targetSphere.userData.aiType || currentActiveLayer === null)) { // Highlight if specific layer is active OR if "All" is active (currentActiveLayer is null)
 
             if (currentHoveredObject != targetSphere) {
                 if (currentHoveredObject) { // Reset previous hovered object
@@ -600,6 +629,18 @@ function animate() {
 
         // Also add a subtle rotation to the active wave itself
         wave.rotation.z += 0.001; // Slow rotation
+    } else if (currentActiveLayer === null) { // If "All" is active, animate all waves
+        for (const type in aiWaves) {
+            const wave = aiWaves[type];
+            if (wave.visible) { // Only animate if visible
+                wave.children.forEach((child, index) => {
+                    if (child.userData.isImpactPoint) {
+                        child.position.y = Math.sin(Date.now() * 0.002 + index * 0.5) * 0.3;
+                    }
+                });
+                wave.rotation.z += 0.001;
+            }
+        }
     }
 
     // Render the scene with post-processing
